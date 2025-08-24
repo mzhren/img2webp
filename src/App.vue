@@ -1,22 +1,23 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { open } from '@tauri-apps/plugin-dialog';
 
 const selectedImages = ref<string[]>([]);
 const isDragging = ref(false);
+const fileInput = ref<HTMLInputElement>();
 
-async function selectImages() {
-  const selected = await open({
-    multiple: true,
-    filters: [{
-      name: 'Image',
-      extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp']
-    }]
-  });
-  
-  if (selected) {
-    selectedImages.value = Array.isArray(selected) ? selected : [selected];
+function handleFileSelect() {
+  fileInput.value?.click();
+}
+
+function handleFileChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  if (input.files && input.files.length > 0) {
+    const files = Array.from(input.files);
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+    selectedImages.value = [...selectedImages.value, ...imageFiles.map(file => URL.createObjectURL(file))];
   }
+  // 重置input以允许选择相同文件
+  input.value = '';
 }
 
 function handleDragOver(e: DragEvent) {
@@ -34,15 +35,10 @@ function handleDrop(e: DragEvent) {
   isDragging.value = false;
   
   const files = e.dataTransfer?.files;
-  if (files) {
-    const imagePaths: string[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.type.startsWith('image/')) {
-        imagePaths.push(file.path);
-      }
-    }
-    selectedImages.value = [...selectedImages.value, ...imagePaths];
+  if (files && files.length > 0) {
+    const fileList = Array.from(files);
+    const imageFiles = fileList.filter(file => file.type.startsWith('image/'));
+    selectedImages.value = [...selectedImages.value, ...imageFiles.map(file => URL.createObjectURL(file))];
   }
 }
 </script>
@@ -51,10 +47,19 @@ function handleDrop(e: DragEvent) {
   <main class="container">
     <h1>图片转WebP工具</h1>
 
+    <input
+      ref="fileInput"
+      type="file"
+      multiple
+      accept="image/png, image/jpeg, image/jpg, image/gif, image/bmp, image/webp"
+      @change="handleFileChange"
+      style="display: none"
+    />
+
     <div 
       class="drop-zone"
       :class="{ 'dragging': isDragging }"
-      @click="selectImages"
+      @click="handleFileSelect"
       @dragover="handleDragOver"
       @dragleave="handleDragLeave"
       @drop="handleDrop"
@@ -69,7 +74,7 @@ function handleDrop(e: DragEvent) {
       <h3>已选图片列表</h3>
       <div class="image-grid">
         <div v-for="(image, index) in selectedImages" :key="index" class="image-item">
-          <p>{{ image }}</p>
+          <img :src="image" alt="Selected image" class="thumbnail" />
         </div>
       </div>
     </div>
@@ -130,15 +135,21 @@ function handleDrop(e: DragEvent) {
   background-color: #f8f9fa;
   border: 1px solid #dee2e6;
   border-radius: 8px;
-  padding: 16px;
+  padding: 8px;
   text-align: center;
-  word-break: break-all;
+  overflow: hidden;
+  transition: transform 0.2s ease;
 }
 
-.image-item p {
-  margin: 0;
-  font-size: 14px;
-  color: #495057;
+.image-item:hover {
+  transform: scale(1.05);
+}
+
+.thumbnail {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 4px;
 }
 </style>
 <style>
