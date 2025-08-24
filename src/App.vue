@@ -1,50 +1,145 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { open } from '@tauri-apps/plugin-dialog';
 
-const greetMsg = ref("");
-const name = ref("");
+const selectedImages = ref<string[]>([]);
+const isDragging = ref(false);
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", { name: name.value });
+async function selectImages() {
+  const selected = await open({
+    multiple: true,
+    filters: [{
+      name: 'Image',
+      extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp']
+    }]
+  });
+  
+  if (selected) {
+    selectedImages.value = Array.isArray(selected) ? selected : [selected];
+  }
+}
+
+function handleDragOver(e: DragEvent) {
+  e.preventDefault();
+  isDragging.value = true;
+}
+
+function handleDragLeave(e: DragEvent) {
+  e.preventDefault();
+  isDragging.value = false;
+}
+
+function handleDrop(e: DragEvent) {
+  e.preventDefault();
+  isDragging.value = false;
+  
+  const files = e.dataTransfer?.files;
+  if (files) {
+    const imagePaths: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type.startsWith('image/')) {
+        imagePaths.push(file.path);
+      }
+    }
+    selectedImages.value = [...selectedImages.value, ...imagePaths];
+  }
 }
 </script>
 
 <template>
   <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
+    <h1>图片转WebP工具</h1>
 
-    <div class="row">
-      <a href="https://vite.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
+    <div 
+      class="drop-zone"
+      :class="{ 'dragging': isDragging }"
+      @click="selectImages"
+      @dragover="handleDragOver"
+      @dragleave="handleDragLeave"
+      @drop="handleDrop"
+    >
+      <div class="drop-content">
+        <p>点击选择图片或拖拽图片到此处</p>
+        <p class="hint">支持 PNG, JPG, JPEG, GIF, BMP, WebP 格式</p>
+      </div>
     </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
 
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
-    </form>
-    <p>{{ greetMsg }}</p>
+    <div v-if="selectedImages.length > 0" class="image-list">
+      <h3>已选图片列表</h3>
+      <div class="image-grid">
+        <div v-for="(image, index) in selectedImages" :key="index" class="image-item">
+          <p>{{ image }}</p>
+        </div>
+      </div>
+    </div>
   </main>
 </template>
 
 <style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
+.drop-zone {
+  border: 2px dashed #007bff;
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: #f8f9fa;
+  margin: 20px auto;
+  width: 80%;
 }
 
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
+.drop-zone:hover {
+  background-color: #e9ecef;
+  border-color: #0056b3;
 }
 
+.drop-zone.dragging {
+  background-color: #d1ecf1;
+  border-color: #17a2b8;
+  transform: scale(1.02);
+}
+
+.drop-content p {
+  margin: 0;
+  font-size: 18px;
+  color: #495057;
+}
+
+.hint {
+  font-size: 14px !important;
+  color: #6c757d !important;
+  margin-top: 8px !important;
+}
+
+.image-list {
+  margin-top: 30px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.image-item {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  word-break: break-all;
+}
+
+.image-item p {
+  margin: 0;
+  font-size: 14px;
+  color: #495057;
+}
 </style>
 <style>
 :root {
@@ -65,7 +160,7 @@ async function greet() {
 
 .container {
   margin: 0;
-  padding-top: 10vh;
+  padding-top: 5px;
   display: flex;
   flex-direction: column;
   justify-content: center;
