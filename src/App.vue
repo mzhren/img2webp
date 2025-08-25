@@ -31,14 +31,28 @@ function handleDragLeave(e: DragEvent) {
 }
 
 function handleDrop(e: DragEvent) {
+  console.log(e.dataTransfer?.items);
   e.preventDefault();
   isDragging.value = false;
   
-  const files = e.dataTransfer?.files;
-  if (files && files.length > 0) {
-    const fileList = Array.from(files);
-    const imageFiles = fileList.filter(file => file.type.startsWith('image/'));
-    selectedImages.value = [...selectedImages.value, ...imageFiles.map(file => URL.createObjectURL(file))];
+  if (!e.dataTransfer) return;
+
+  const files: File[] = [];
+  const items = e.dataTransfer.items;
+  
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.kind === 'file') {
+      const file = item.getAsFile();
+      if (file && file.type.startsWith('image/')) {
+        files.push(file);
+      }
+    }
+  }
+
+  if (files.length > 0) {
+    const imageUrls = files.map(file => URL.createObjectURL(file));
+    selectedImages.value = [...selectedImages.value, ...imageUrls];
   }
 }
 </script>
@@ -56,8 +70,8 @@ function handleDrop(e: DragEvent) {
       style="display: none"
     />
 
-    <div 
-      class="drop-zone"
+    <div data-tauri-drag-region
+      class="drop-zone drag-area"
       :class="{ 'dragging': isDragging }"
       @click="handleFileSelect"
       @dragover="handleDragOver"
