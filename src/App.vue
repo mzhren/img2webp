@@ -101,6 +101,14 @@ function handleDrop(e: DragEvent) {
       </div>
     </div>
 
+    <div class="options">
+
+    </div>
+
+    <div class="actions">
+      <button class="primary convert-btn btn-primary" @click="">转换</button>
+    </div>
+
     <div v-if="selectedImages.length > 0" class="image-list">
       <div class="view-controls">
         <!-- <h3>已选图片列表</h3> -->
