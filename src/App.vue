@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
+import { open,message } from "@tauri-apps/plugin-dialog";
 
 interface ImageInfo {
   url: string;
   name: string;
+  file?: File;
 }
 
 const selectedImages = ref<ImageInfo[]>([]);
 const isDragging = ref(false);
 const fileInput = ref<HTMLInputElement>();
 const viewMode = ref<'grid' | 'list'>('grid');
+const isConverting = ref(false);
 
 function removeImage(index: number) {
   selectedImages.value.splice(index, 1);
@@ -26,7 +30,8 @@ function handleFileChange(e: Event) {
     const imageFiles = files.filter(file => file.type.startsWith('image/'));
     const newImages = imageFiles.map(file => ({
       url: URL.createObjectURL(file),
-      name: file.name
+      name: file.name,
+      file: file
     }));
     selectedImages.value = [...selectedImages.value, ...newImages];
   }
@@ -67,10 +72,67 @@ function handleDrop(e: DragEvent) {
   if (files.length > 0) {
     const newImages = files.map(file => ({
       url: URL.createObjectURL(file),
-      name: file.name
+      name: file.name,
+      file: file
     }));
     selectedImages.value = [...selectedImages.value, ...newImages];
   }
+}
+
+async function convertImages() {
+  console.log("转换中，请稍候...");
+  if (selectedImages.value.length === 0) {
+    await message('File not found', { title: 'Tauri', kind: 'error' });
+    alert("请先选择要转换的图片");
+    return;
+  }
+
+  isConverting.value = true;
+  
+  // try {
+    const outputDir = await open({
+      directory: true,
+      multiple: false,
+      title: "选择WebP图片保存位置"
+    });
+
+    if (!outputDir) {
+      isConverting.value = false;
+      return;
+    }
+
+    for (const image of selectedImages.value) {
+      if (image.file) {
+        const arrayBuffer = await image.file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        
+        // 临时保存文件到本地
+        const tempPath = `/tmp/${image.name}`;
+        await invoke('write_temp_file', { 
+          path: tempPath, 
+          data: Array.from(uint8Array) 
+        });
+
+        // 转换文件
+        const outputFileName = image.name.replace(/\.[^/.]+$/, "") + ".webp";
+        const outputPath = `${outputDir}/${outputFileName}`;
+        
+        await invoke('convert_to_webp', { 
+          imagePath: tempPath, 
+          outputPath: outputPath 
+        });
+
+        console.log(`Converted ${image.name} to ${outputFileName}`);
+      }
+    }
+
+    alert("转换完成！");
+  // } catch (error) {
+  //   console.error("转换失败:", error);
+  //   alert("转换失败，请检查控制台输出");
+  // } finally {
+  //   isConverting.value = false;
+  // }
 }
 </script>
 
@@ -106,7 +168,9 @@ function handleDrop(e: DragEvent) {
     </div>
 
     <div class="actions">
-      <button class="primary convert-btn btn-primary" @click="">转换</button>
+      <button class="convert-btn" @click="convertImages" :disabled="isConverting || selectedImages.length === 0">
+        {{ isConverting ? '转换中...' : '转换' }}
+      </button>
     </div>
 
     <div v-if="selectedImages.length > 0" class="image-list">
