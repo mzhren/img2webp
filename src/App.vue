@@ -1,9 +1,19 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-const selectedImages = ref<string[]>([]);
+interface ImageInfo {
+  url: string;
+  name: string;
+}
+
+const selectedImages = ref<ImageInfo[]>([]);
 const isDragging = ref(false);
 const fileInput = ref<HTMLInputElement>();
+const viewMode = ref<'grid' | 'list'>('grid');
+
+function removeImage(index: number) {
+  selectedImages.value.splice(index, 1);
+}
 
 function handleFileSelect() {
   fileInput.value?.click();
@@ -14,7 +24,11 @@ function handleFileChange(e: Event) {
   if (input.files && input.files.length > 0) {
     const files = Array.from(input.files);
     const imageFiles = files.filter(file => file.type.startsWith('image/'));
-    selectedImages.value = [...selectedImages.value, ...imageFiles.map(file => URL.createObjectURL(file))];
+    const newImages = imageFiles.map(file => ({
+      url: URL.createObjectURL(file),
+      name: file.name
+    }));
+    selectedImages.value = [...selectedImages.value, ...newImages];
   }
   // 重置input以允许选择相同文件
   input.value = '';
@@ -51,8 +65,11 @@ function handleDrop(e: DragEvent) {
   }
 
   if (files.length > 0) {
-    const imageUrls = files.map(file => URL.createObjectURL(file));
-    selectedImages.value = [...selectedImages.value, ...imageUrls];
+    const newImages = files.map(file => ({
+      url: URL.createObjectURL(file),
+      name: file.name
+    }));
+    selectedImages.value = [...selectedImages.value, ...newImages];
   }
 }
 </script>
@@ -85,10 +102,36 @@ function handleDrop(e: DragEvent) {
     </div>
 
     <div v-if="selectedImages.length > 0" class="image-list">
-      <h3>已选图片列表</h3>
-      <div class="image-grid">
+      <div class="view-controls">
+        <!-- <h3>已选图片列表</h3> -->
+        <div class="view-buttons">
+          <button 
+            :class="{ active: viewMode === 'grid' }" 
+            @click="viewMode = 'grid'"
+          >
+            网格视图
+          </button>
+          <button 
+            :class="{ active: viewMode === 'list' }" 
+            @click="viewMode = 'list'"
+          >
+            列表视图
+          </button>
+        </div>
+      </div>
+      
+      <div v-if="viewMode === 'grid'" class="image-grid">
         <div v-for="(image, index) in selectedImages" :key="index" class="image-item">
-          <img :src="image" alt="Selected image" class="thumbnail" />
+          <img :src="image.url" alt="Selected image" class="thumbnail" />
+          <button class="delete-btn" @click.stop="removeImage(index)">×</button>
+        </div>
+      </div>
+      
+      <div v-if="viewMode === 'list'" class="image-list-view">
+        <div v-for="(image, index) in selectedImages" :key="index" class="list-item">
+          <img :src="image.url" alt="Selected image" class="list-thumbnail" />
+          <span class="file-name">{{ image.name }}</span>
+          <button class="delete-btn" @click.stop="removeImage(index)">×</button>
         </div>
       </div>
     </div>
@@ -134,14 +177,43 @@ function handleDrop(e: DragEvent) {
 .image-list {
   margin-top: 30px;
   max-width: 800px;
+  min-width: 600px;
   margin-left: auto;
   margin-right: auto;
 }
 
+.view-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.view-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.view-buttons button {
+  padding: 6px 12px;
+  border: 1px solid #dee2e6;
+  background-color: white;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.view-buttons button.active {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
 .image-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 16px;
+  min-width: 600px;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
   margin-top: 16px;
 }
 
@@ -153,6 +225,8 @@ function handleDrop(e: DragEvent) {
   text-align: center;
   overflow: hidden;
   transition: transform 0.2s ease;
+  width: 100px;
+  height: 100px;
 }
 
 .image-item:hover {
@@ -161,9 +235,69 @@ function handleDrop(e: DragEvent) {
 
 .thumbnail {
   width: 100%;
-  height: 150px;
+  height: 100%;
   object-fit: cover;
   border-radius: 4px;
+}
+
+.image-list-view {
+  margin-top: 16px;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background-color: #f8f9fa;
+}
+
+.list-thumbnail {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-right: 12px;
+}
+
+.file-name {
+  font-size: 14px;
+  color: #495057;
+  flex: 1;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  color: red;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.image-item:hover .delete-btn,
+.list-item:hover .delete-btn {
+  opacity: 1;
+}
+
+.image-item {
+  position: relative;
+}
+
+.list-item {
+  position: relative;
+  padding-right: 40px;
 }
 </style>
 <style>
