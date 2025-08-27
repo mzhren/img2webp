@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open,message } from "@tauri-apps/plugin-dialog";
+import { platform } from "@tauri-apps/plugin-os";
 
 interface ImageInfo {
   url: string;
@@ -82,14 +83,13 @@ function handleDrop(e: DragEvent) {
 async function convertImages() {
   console.log("转换中，请稍候...");
   if (selectedImages.value.length === 0) {
-    await message('File not found', { title: 'Tauri', kind: 'error' });
-    alert("请先选择要转换的图片");
+    await message('请先选择要转换的图片', { title: '提示', kind: 'warning' });
     return;
   }
 
   isConverting.value = true;
   
-  // try {
+  try {
     const outputDir = await open({
       directory: true,
       multiple: false,
@@ -106,8 +106,20 @@ async function convertImages() {
         const arrayBuffer = await image.file.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
         
-        // 临时保存文件到本地
-        const tempPath = `/tmp/${image.name}`;
+        // 使用 tauri-plugin-os 检测操作系统
+        const currentPlatform = await platform();
+        const timestamp = Date.now();
+        const randomId = Math.random().toString(36).substring(2);
+        const tempFileName = `${timestamp}_${randomId}_${image.name}`;
+        
+        let tempPath: string;
+        if (currentPlatform === 'windows') {
+          tempPath = `C:\\Windows\\Temp\\${tempFileName}`;
+        } else {
+          tempPath = `/tmp/${tempFileName}`;
+        }
+
+        // 写入临时文件
         await invoke('write_temp_file', { 
           path: tempPath, 
           data: Array.from(uint8Array) 
@@ -126,13 +138,38 @@ async function convertImages() {
       }
     }
 
-    alert("转换完成！");
-  // } catch (error) {
-  //   console.error("转换失败:", error);
-  //   alert("转换失败，请检查控制台输出");
-  // } finally {
-  //   isConverting.value = false;
-  // }
+    await message('转换完成！', { title: '成功', kind: 'info' });
+  } catch (error: unknown) {
+    console.error("转换失败:", error);
+    
+    // 检查是否是 cwebp 程序不存在的错误
+    const errorMessage = typeof error === 'string' ? error : (error instanceof Error ? error.message : String(error));
+    if (errorMessage.includes('program not found') || errorMessage.includes('cwebp')) {
+      await message(
+        '转换失败：系统中未找到 cwebp 程序。\n\n请安装 WebP 工具：\n' +
+        '• Windows: 下载 libwebp 并添加到 PATH\n' +
+        '• macOS: brew install webp\n' +
+        '• Ubuntu: sudo apt-get install webp',
+        { 
+          title: '缺少依赖程序', 
+          kind: 'error' 
+        }
+      );
+    } else {
+      await message(
+        `转换失败：${errorMessage}\n\n请检查：\n` +
+        '• 输出目录是否有写入权限\n' +
+        '• 图片文件是否损坏\n' +
+        '• 磁盘空间是否充足',
+        { 
+          title: '转换错误', 
+          kind: 'error' 
+        }
+      );
+    }
+  } finally {
+    isConverting.value = false;
+  }
 }
 </script>
 
